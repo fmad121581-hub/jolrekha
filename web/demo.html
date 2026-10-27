@@ -1,0 +1,194 @@
+<!doctype html>
+<html lang="bn">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Jolrekha Demo</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Hind+Siliguri:wght@400;600&display=swap" rel="stylesheet">
+<style>
+  :root {
+    --bg: #f6f7f9; --panel: #ffffff; --text: #1d2330; --muted: #5d6677; --border: #dde1e8;
+    --accent: #1f6feb; --me: #e7f0ff; --bot: #f1f3f6; --ok: #2e7d4f; --err: #c62828;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root:not([data-theme="light"]) {
+      --bg: #11151c; --panel: #1a1f29; --text: #e6e9ef; --muted: #9aa3b2; --border: #2c3442;
+      --me: #1d2b45; --bot: #232a36; --ok: #6fcf97; --err: #ef9a9a;
+    }
+  }
+  :root[data-theme="dark"] { --bg: #11151c; --panel: #1a1f29; --text: #e6e9ef; --muted: #9aa3b2;
+    --border: #2c3442; --me: #1d2b45; --bot: #232a36; --ok: #6fcf97; --err: #ef9a9a; }
+  * { box-sizing: border-box; }
+  html, body { margin: 0; height: 100%; background: var(--bg); color: var(--text);
+    font-family: "Hind Siliguri", system-ui, sans-serif; }
+  .app { display: grid; grid-template-columns: 1fr 380px; height: 100vh; }
+  iframe { border: 0; width: 100%; height: 100%; display: block; }
+  aside { background: var(--panel); border-left: 1px solid var(--border); display: flex; flex-direction: column; min-height: 0; }
+  section { padding: 12px 16px; border-bottom: 1px solid var(--border); }
+  h2 { font-size: 16px; margin: 0 0 8px; }
+  .muted { color: var(--muted); font-size: 13px; }
+  .chat { flex: 1; display: flex; flex-direction: column; min-height: 0; }
+  #log { flex: 1; overflow-y: auto; display: flex; flex-direction: column; gap: 8px; padding: 4px 0; min-height: 120px; }
+  .b { padding: 8px 10px; border-radius: 10px; max-width: 92%; white-space: pre-wrap; line-height: 1.45; font-size: 15px; }
+  .me { background: var(--me); align-self: flex-end; }
+  .bot { background: var(--bot); align-self: flex-start; }
+  .row { display: flex; gap: 6px; margin-top: 8px; }
+  input[type=text] { flex: 1; min-width: 0; padding: 8px; border: 1px solid var(--border); border-radius: 6px;
+    background: var(--bg); color: var(--text); font: inherit; }
+  button { background: var(--accent); color: #fff; border: 0; border-radius: 6px; padding: 8px 12px;
+    font: inherit; cursor: pointer; }
+  button.ghost { background: transparent; color: var(--accent); border: 1px solid var(--border); }
+  .chips { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 6px; }
+  .chips button { padding: 4px 8px; font-size: 13px; }
+  .depths { display: none; gap: 6px; flex-wrap: wrap; margin-top: 8px; }
+  #reportMsg { margin-top: 6px; font-size: 14px; min-height: 1.2em; }
+  .ok { color: var(--ok); } .err { color: var(--err); }
+  @media (max-width: 860px) {
+    .app { grid-template-columns: 1fr; grid-template-rows: 60vh auto; height: auto; }
+    aside { border-left: 0; border-top: 1px solid var(--border); }
+  }
+</style>
+</head>
+<body>
+<div class="app">
+  <iframe id="map" src="/map" title="Jolrekha map"></iframe>
+  <aside>
+    <section>
+      <div class="muted" id="clock"></div>
+      <div class="muted" id="mode"></div>
+    </section>
+    <section class="chat">
+      <h2 id="chatTitle"></h2>
+      <div id="log" aria-live="polite"></div>
+      <div class="chips" id="chips"></div>
+      <form class="row" id="askForm">
+        <input type="text" id="q" autocomplete="off">
+        <button type="submit" id="askBtn"></button>
+      </form>
+    </section>
+    <section>
+      <h2 id="reportTitle"></h2>
+      <div class="muted" id="reportWard"></div>
+      <div class="row">
+        <input type="file" id="photo" accept="image/*" hidden>
+        <button class="ghost" id="pick"></button>
+      </div>
+      <div class="depths" id="depths"></div>
+      <div id="reportMsg"></div>
+    </section>
+  </aside>
+</div>
+<script>
+const T = {
+  bn: { chat: "জলরেখাকে প্রশ্ন করুন", ask: "পাঠান", placeholder: "যেমন: মোহাম্মদপুরে পানি উঠবে?",
+        chips: ["মোহাম্মদপুরে আজ পানি উঠবে?", "যাত্রাবাড়ীর অবস্থা কী?", "সবচেয়ে ঝুঁকিপূর্ণ কোথায়?"],
+        report: "পানির ছবি পাঠান", pick: "📷 ছবি বেছে নিন", pickWard: "আগে ম্যাপে ওয়ার্ডে ক্লিক করুন",
+        ward: "ওয়ার্ড: ", now: "এখন (ডেমো সময়): ", llm: "Muse Spark চালু", rules: "নিয়মভিত্তিক (Muse Spark key নেই)",
+        sending: "পাঠানো হচ্ছে…", howDeep: "পানি কতটা?", recorded: "✅ রিপোর্ট যোগ হয়েছে — ম্যাপ হালনাগাদ হলো",
+        dry: "ছবিতে জমা পানি দেখা যাচ্ছে না", fail: "রিপোর্ট পাঠানো গেল না",
+        depth: { ankle: "গোড়ালি", knee: "হাঁটু", waist: "কোমর", none: "পানি নেই" } },
+  en: { chat: "Ask Jolrekha", ask: "Send", placeholder: "e.g. Will water rise in Mohammadpur?",
+        chips: ["Will Mohammadpur flood today?", "How is Jatrabari?", "Where is the risk highest?"],
+        report: "Report water with a photo", pick: "📷 Choose a photo", pickWard: "Click a ward on the map first",
+        ward: "Ward: ", now: "Now (demo time): ", llm: "Muse Spark on", rules: "rule-based (no Muse Spark key)",
+        sending: "Sending…", howDeep: "How deep is the water?", recorded: "✅ Report added — map updated",
+        dry: "No standing water visible in the photo", fail: "Could not send the report",
+        depth: { ankle: "ankle", knee: "knee", waist: "waist", none: "no water" } },
+};
+let lang = new URLSearchParams(location.search).get("lang") === "en" ? "en" : "bn";
+let state = null, ward = null;
+let session = "s";
+try { session = sessionStorage.getItem("jolrekha-session") || Math.random().toString(36).slice(2);
+      sessionStorage.setItem("jolrekha-session", session); } catch (e) { session = Math.random().toString(36).slice(2); }
+
+const $ = id => document.getElementById(id);
+const mapWin = () => $("map").contentWindow;
+const post = (url, body) => fetch(url, { method: "POST", headers: { "Content-Type": "application/json" },
+                                          body: JSON.stringify(body) }).then(r => r.json());
+
+function render() {
+  const u = T[lang];
+  document.documentElement.lang = lang;
+  $("chatTitle").textContent = u.chat; $("askBtn").textContent = u.ask; $("q").placeholder = u.placeholder;
+  $("reportTitle").textContent = u.report; $("pick").textContent = u.pick;
+  $("chips").innerHTML = "";
+  u.chips.forEach(c => { const b = document.createElement("button"); b.className = "ghost"; b.textContent = c;
+                         b.onclick = () => ask(c); $("chips").appendChild(b); });
+  $("reportWard").textContent = ward ? u.ward + (lang === "bn" ? ward.name_bn : ward.name_en) : u.pickWard;
+  $("pick").disabled = !ward;
+  if (state) {
+    $("clock").textContent = u.now + (lang === "bn" ? state.now_bn : state.now_en);
+    $("mode").textContent = state.llm ? u.llm : u.rules;
+  }
+}
+function bubble(text, who) {
+  const d = document.createElement("div"); d.className = "b " + who; d.textContent = text;
+  $("log").appendChild(d); $("log").scrollTop = $("log").scrollHeight;
+}
+async function ask(q) {
+  if (!q.trim()) return;
+  bubble(q, "me"); $("q").value = "";
+  try { const r = await post("/api/ask", { q, lang, session }); bubble(r.answer, "bot"); }
+  catch (e) { bubble("⚠ " + e, "bot"); }
+}
+$("askForm").onsubmit = e => { e.preventDefault(); ask($("q").value); };
+
+// ----- photo report -----
+$("pick").onclick = () => $("photo").click();
+$("photo").onchange = async () => {
+  const file = $("photo").files[0]; if (!file || !ward) return;
+  const u = T[lang]; const msg = $("reportMsg");
+  msg.className = ""; msg.textContent = u.sending;
+  const image_b64 = await shrink(file);
+  const r = await post("/api/report", { ward_id: ward.id, image_b64, lang }).catch(() => ({ ok: false }));
+  handleReport(r);
+};
+function handleReport(r) {
+  const u = T[lang]; const msg = $("reportMsg"); $("depths").style.display = "none";
+  if (!r.ok) { msg.className = "err"; msg.textContent = u.fail; return; }
+  if (r.status === "recorded") { msg.className = "ok"; msg.textContent = `${u.recorded} (${u.depth[r.depth]})`; reloadMap(); }
+  else if (r.status === "no_water") { msg.className = ""; msg.textContent = u.dry; }
+  else { msg.className = ""; msg.textContent = u.howDeep; showDepths(); }
+}
+function showDepths() {
+  const box = $("depths"); box.innerHTML = ""; box.style.display = "flex";
+  ["ankle", "knee", "waist", "none"].forEach(d => {
+    const b = document.createElement("button"); b.className = "ghost"; b.textContent = T[lang].depth[d];
+    b.onclick = async () => handleReport(await post("/api/report", { ward_id: ward.id, depth: d, lang }));
+    box.appendChild(b);
+  });
+}
+// Downscale to ≤1280 px JPEG before upload
+function shrink(file) {
+  return new Promise(res => {
+    const img = new Image();
+    img.onload = () => {
+      const s = Math.min(1, 1280 / Math.max(img.width, img.height));
+      const c = document.createElement("canvas"); c.width = img.width * s; c.height = img.height * s;
+      c.getContext("2d").drawImage(img, 0, 0, c.width, c.height);
+      res(c.toDataURL("image/jpeg", 0.85));
+    };
+    img.src = URL.createObjectURL(file);
+  });
+}
+
+// ----- sync with the map -----
+function syncMap() {
+  mapWin().postMessage({ type: "jolrekha-lang", lang }, "*");
+  if (state) mapWin().postMessage({ type: "jolrekha-time", time: state.now }, "*");
+}
+function reloadMap() { $("map").src = "/map?" + Date.now(); }
+$("map").onload = syncMap;
+window.addEventListener("message", async e => {
+  const m = e.data || {};
+  if (m.type === "jolrekha-lang") { lang = m.lang; render(); }
+  if (m.type === "jolrekha-ward") { ward = m; $("reportMsg").textContent = ""; $("depths").style.display = "none"; render(); }
+  if (m.type === "jolrekha-time" && state && m.time !== state.now) { state = await post("/api/time", { now: m.time }); render(); }
+});
+
+fetch("/api/state").then(r => r.json()).then(s => { state = s; render(); syncMap(); });
+render();
+</script>
+</body>
+</html>

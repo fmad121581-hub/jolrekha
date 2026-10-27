@@ -1,0 +1,7 @@
+subset,n,layer,spearman_vs_sar
+all units,178,propensity,0.451
+all units,178,p_informal,-0.438
+all units,178,V,-0.273
+city wards only,104,propensity,0.178
+city wards only,104,p_informal,-0.255
+city wards only,104,V,-0.089

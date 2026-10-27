@@ -1,0 +1,9 @@
+geopandas>=1.0
+pandas>=2.2
+numpy>=2.0
+requests>=2.32
+shapely>=2.0
+rasterio>=1.4
+rasterstats>=0.20
+openai>=1.60
+pytest>=8.0

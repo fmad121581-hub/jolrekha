@@ -1,0 +1,208 @@
+<!doctype html>
+<html lang="bn">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Jolrekha Map</title>
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.css">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Hind+Siliguri:wght@400;600&display=swap" rel="stylesheet">
+<style>
+  :root {
+    --bg: #f6f7f9; --panel: #ffffff; --text: #1d2330; --muted: #5d6677; --border: #dde1e8;
+    --red: #d7301f; --orange: #f08c00; --yellow: #f2c94c; --green: #4caf7a; --accent: #1f6feb;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root:not([data-theme="light"]) {
+      --bg: #11151c; --panel: #1a1f29; --text: #e6e9ef; --muted: #9aa3b2; --border: #2c3442;
+    }
+  }
+  :root[data-theme="dark"] { --bg: #11151c; --panel: #1a1f29; --text: #e6e9ef; --muted: #9aa3b2; --border: #2c3442; }
+  * { box-sizing: border-box; }
+  html, body { margin: 0; height: 100%; background: var(--bg); color: var(--text);
+    font-family: "Hind Siliguri", system-ui, sans-serif; }
+  .app { display: grid; grid-template-columns: 1fr 340px; height: 100vh; }
+  #map { height: 100%; }
+  aside { background: var(--panel); border-left: 1px solid var(--border); padding: 16px;
+    overflow-y: auto; display: flex; flex-direction: column; gap: 14px; }
+  .head { display: flex; justify-content: space-between; align-items: flex-start; gap: 8px; }
+  h1 { font-size: 22px; margin: 0; }
+  .sub { color: var(--muted); font-size: 14px; margin-top: 2px; }
+  .lang { display: inline-flex; border: 1px solid var(--border); border-radius: 6px; overflow: hidden; flex: none; }
+  .lang button { background: transparent; color: var(--muted); border: 0; border-radius: 0; padding: 4px 10px; }
+  .lang button[aria-pressed="true"] { background: var(--accent); color: #fff; }
+  .time { font-size: 20px; font-weight: 600; font-variant-numeric: tabular-nums; }
+  .controls { display: flex; gap: 8px; align-items: center; }
+  .controls input { flex: 1; }
+  button { background: var(--accent); color: #fff; border: 0; border-radius: 6px;
+    padding: 6px 12px; font: inherit; cursor: pointer; }
+  .counts { display: grid; grid-template-columns: repeat(4, 1fr); gap: 6px; }
+  .count { border-radius: 8px; padding: 6px; text-align: center; border: 1px solid var(--border); font-size: 14px; }
+  .count b { display: block; font-size: 20px; }
+  .dot { display: inline-block; width: 10px; height: 10px; border-radius: 50%; margin-right: 4px; }
+  ol { margin: 0; padding-left: 20px; }
+  ol li { padding: 4px 0; cursor: pointer; font-size: 14px; }
+  ol li:hover { color: var(--accent); }
+  .msg { background: var(--bg); border: 1px solid var(--border); border-radius: 8px; padding: 10px;
+    font-size: 15px; line-height: 1.5; }
+  .note { color: var(--muted); font-size: 12px; }
+  @media (max-width: 760px) {
+    .app { grid-template-columns: 1fr; grid-template-rows: 55vh auto; height: auto; }
+    #map { height: 55vh; }
+    aside { border-left: 0; border-top: 1px solid var(--border); }
+  }
+</style>
+</head>
+<body>
+<div class="app">
+  <div id="map"></div>
+  <aside>
+    <div class="head">
+      <div>
+        <h1 id="appname"></h1>
+        <div class="sub" id="title"></div>
+      </div>
+      <div class="lang" role="group" aria-label="Language">
+        <button data-lang="bn">বাংলা</button>
+        <button data-lang="en">English</button>
+      </div>
+    </div>
+    <div>
+      <div class="time" id="time"></div>
+      <div class="controls">
+        <button id="play" aria-label="Play">▶</button>
+        <input type="range" id="slider" min="0" value="0" aria-label="Time">
+      </div>
+    </div>
+    <div class="counts" id="counts"></div>
+    <div>
+      <div class="sub" id="toplabel"></div>
+      <ol id="top"></ol>
+    </div>
+    <div class="msg" id="msg"></div>
+    <div class="note" id="note"></div>
+  </aside>
+</div>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.js"></script>
+<script>
+const DATA = /*__DATA__*/null;
+const UI = {
+  bn: { app: "জলরেখা", top: "সবচেয়ে ঝুঁকিপূর্ণ ওয়ার্ড (আগে সতর্কতা পাবে)", hint: "ম্যাপে কোনো ওয়ার্ডে ক্লিক করুন।",
+        score: "স্কোর", informal: "বসতি-ঝুঁকি",
+        note: "স্কোর = বৃষ্টি × বসতির ঝুঁকি × (১ + মাঠের রিপোর্ট)। বৃষ্টি: Open-Meteo। ম্যাপ: © OpenStreetMap।" },
+  en: { app: "Jolrekha", top: "Highest-risk wards (alerted first)", hint: "Click a ward on the map.",
+        score: "Score", informal: "Informality",
+        note: "Score = rain × settlement vulnerability × (1 + field reports). Rain: Open-Meteo. Map: © OpenStreetMap." },
+};
+const COLORS = { red: "var(--red)", orange: "var(--orange)", yellow: "var(--yellow)", green: "var(--green)" };
+const HEX = { red: "#d7301f", orange: "#f08c00", yellow: "#f2c94c", green: "#4caf7a" };
+const ORDER = ["red", "orange", "yellow", "green"];
+const bnDigits = s => String(s).replace(/\d/g, d => "০১২৩৪৫৬৭৮৯"[d]);
+
+let lang = new URLSearchParams(location.search).get("lang");
+if (!UI[lang]) { try { lang = localStorage.getItem("jolrekha-lang"); } catch (e) {} }
+if (!UI[lang]) lang = "bn";
+let t = 0, selected = null, timer = null;
+
+const num = s => lang === "bn" ? bnDigits(s) : String(s);
+const nameOf = p => lang === "bn" ? p.name_bn : p.name_en;
+function message(p) {
+  const lv = p.level[t];
+  const rain = p.rain[t] >= 1 ? DATA.rain_note[lang].replace("{mm}", num(p.rain[t])) : "";
+  return DATA.templates[lang][lv].replace("{name}", nameOf(p)).replace("{rain}", rain);
+}
+
+const map = L.map("map").setView([23.79, 90.40], 11);
+L.tileLayer("https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png", {
+  maxZoom: 18, attribution: "© OpenStreetMap"
+}).addTo(map);
+// When embedded in the web demo, keep time / language / selected ward in sync with the page
+const embedded = window.parent !== window;
+function tellParent(msg) { if (embedded) window.parent.postMessage(msg, "*"); }
+function selectWard(f) {
+  selected = f.properties.id;
+  showMsg(f);
+  tellParent({ type: "jolrekha-ward", id: f.properties.id, name_bn: f.properties.name_bn, name_en: f.properties.name_en });
+}
+window.addEventListener("message", e => {
+  const m = e.data || {};
+  if (m.type === "jolrekha-lang" && UI[m.lang]) { lang = m.lang; render(); }
+  if (m.type === "jolrekha-time") {
+    const i = DATA.times.indexOf(m.time);
+    if (i >= 0) { t = i; slider.value = t; render(); }
+  }
+});
+
+const layer = L.geoJSON(DATA.geojson, {
+  style: f => styleFor(f),
+  onEachFeature: (f, l) => l.on("click", () => selectWard(f))
+}).addTo(map);
+// Refit whenever the container gets its real size (iframes can start at 0×0)
+const fit = () => { map.invalidateSize(); map.fitBounds(layer.getBounds()); };
+fit();
+window.addEventListener("load", fit);
+new ResizeObserver(() => map.invalidateSize()).observe(document.getElementById("map"));
+let fitted = false;
+new ResizeObserver(e => { if (!fitted && e[0].contentRect.width > 0) { fitted = true; fit(); } })
+  .observe(document.getElementById("map"));
+
+function styleFor(f) {
+  return { color: "#ffffff", weight: 0.6, fillColor: HEX[f.properties.level[t]],
+           fillOpacity: 0.25 + 0.6 * f.properties.score[t] };
+}
+function showMsg(f) {
+  const p = f.properties, u = UI[lang];
+  document.getElementById("msg").innerHTML =
+    `<b>${nameOf(p)}</b> · ${u.score} ${num(p.score[t].toFixed(2))} · ${u.informal} ${num(p.p)}<br>${message(p)}`;
+}
+function render() {
+  const u = UI[lang];
+  document.documentElement.lang = lang;
+  document.getElementById("appname").textContent = u.app;
+  document.getElementById("title").textContent = DATA.title[lang];
+  document.getElementById("toplabel").textContent = u.top;
+  document.getElementById("note").textContent = u.note;
+  document.querySelectorAll(".lang button").forEach(b => b.setAttribute("aria-pressed", b.dataset.lang === lang));
+  document.getElementById("time").textContent = num(DATA.times[t]);
+  layer.setStyle(styleFor);
+
+  const feats = DATA.geojson.features;
+  const counts = Object.fromEntries(ORDER.map(k => [k, 0]));
+  feats.forEach(f => counts[f.properties.level[t]]++);
+  document.getElementById("counts").innerHTML = ORDER.map(k =>
+    `<div class="count"><span class="dot" style="background:${COLORS[k]}"></span>${DATA.levels[lang][k]}<b>${num(counts[k])}</b></div>`
+  ).join("");
+
+  const top = [...feats].sort((a, b) => b.properties.score[t] - a.properties.score[t]).slice(0, 10);
+  const ol = document.getElementById("top");
+  ol.innerHTML = "";
+  top.forEach(f => {
+    const li = document.createElement("li");
+    li.innerHTML = `<span class="dot" style="background:${COLORS[f.properties.level[t]]}"></span>${nameOf(f.properties)} — ${num(f.properties.score[t].toFixed(2))}`;
+    li.onclick = () => selectWard(f);
+    ol.appendChild(li);
+  });
+  const sel = selected && feats.find(x => x.properties.id === selected);
+  if (sel) showMsg(sel); else document.getElementById("msg").textContent = u.hint;
+}
+
+document.querySelectorAll(".lang button").forEach(b => b.onclick = () => {
+  lang = b.dataset.lang;
+  try { localStorage.setItem("jolrekha-lang", lang); } catch (e) {}
+  render();
+  tellParent({ type: "jolrekha-lang", lang });
+});
+const slider = document.getElementById("slider");
+slider.max = DATA.times.length - 1;
+const timeChanged = () => tellParent({ type: "jolrekha-time", time: DATA.times[t] });
+slider.oninput = () => { t = +slider.value; render(); };
+slider.onchange = timeChanged;
+document.getElementById("play").onclick = e => {
+  if (timer) { clearInterval(timer); timer = null; e.target.textContent = "▶"; timeChanged(); return; }
+  e.target.textContent = "⏸";
+  timer = setInterval(() => { t = (t + 1) % DATA.times.length; slider.value = t; render(); timeChanged(); }, 700);
+};
+render();
+</script>
+</body>
+</html>
