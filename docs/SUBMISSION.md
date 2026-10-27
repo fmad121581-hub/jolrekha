@@ -70,4 +70,4 @@ The Dhaka metropolitan region has about 12.5 million people, and my classifier p
 - Partner with ward councillors and NGOs who already run volunteer networks.
 
 ## Disclosure
-The informality classifier and SAR work were built before the hackathon. A first prototype of Jolrekha (scoring engine, replay, map) was started on 25 Oct 2026, the day before kickoff. The Meta-model integrations, the bot and the web demo are completed and validated with real models during the hackathon window. (⏳ Before submitting: put the repo under git and describe here exactly what existed at kickoff.)
+The informality classifier and SAR work were built before the hackathon. A first prototype of Jolrekha (scoring engine, replay, map) was started on 25 Oct 2026, the day before kickoff. The Meta-model integrations, the bot and the web demo were completed during the hackathon window. The first commit (27 Oct) bundles everything up to that point; its message records the pre-kickoff start.
